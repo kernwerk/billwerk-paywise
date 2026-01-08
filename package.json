@@ -1,0 +1,16 @@
+{
+  "name": "bwsync",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Billwerk PaymentEscalated webhook to Paywise case sync",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js"
+  },
+  "dependencies": {
+    "axios": "^1.7.9",
+    "dotenv": "^16.4.5",
+    "express": "^4.19.2"
+  }
+}
