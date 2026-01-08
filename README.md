@@ -17,6 +17,7 @@ cp .env.example .env
 ```
 
 Set `BILLWERK_CLIENT_ID`, `BILLWERK_CLIENT_SECRET`, and `PAYWISE_TOKEN`. The Billwerk OAuth URL is derived from `BILLWERK_BASE_URL` (e.g., `https://app.billwerk.com/oauth/token/`).
+Optionally set `BILLWERK_TRIGGER_DAYS` to a comma-separated list of `TriggerDays` values that should create a Paywise case (default: `30`).
 
 3. Start the server:
 

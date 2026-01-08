@@ -4,6 +4,29 @@ const dotenv = require("dotenv");
 
 dotenv.config();
 
+function parseTriggerDays(value, defaultValue) {
+  const fallback =
+    defaultValue === undefined || defaultValue === null
+      ? []
+      : [Number(defaultValue)];
+  const raw =
+    value !== undefined && value !== null && String(value).trim() !== ""
+      ? String(value)
+      : null;
+  if (!raw) {
+    return fallback.filter((entry) => Number.isFinite(entry));
+  }
+  const days = raw
+    .split(/[\s,]+/)
+    .map((entry) => Number(entry))
+    .filter((entry) => Number.isFinite(entry))
+    .map((entry) => Math.trunc(entry));
+  if (days.length === 0) {
+    return fallback.filter((entry) => Number.isFinite(entry));
+  }
+  return Array.from(new Set(days));
+}
+
 const config = {
   port: Number(process.env.PORT || 3000),
   billwerkBaseUrl: process.env.BILLWERK_BASE_URL || "https://app.billwerk.com",
@@ -15,6 +38,7 @@ const config = {
   paywiseBaseUrl: process.env.PAYWISE_BASE_URL || "https://api.paywise.de",
   paywiseToken: process.env.PAYWISE_TOKEN,
   webhookSharedSecret: process.env.WEBHOOK_SHARED_SECRET,
+  billwerkTriggerDays: parseTriggerDays(process.env.BILLWERK_TRIGGER_DAYS, 30),
   paywiseStartingApproach:
     process.env.PAYWISE_STARTING_APPROACH || "extrajudicial",
   paywiseDefaultCurrency: process.env.PAYWISE_DEFAULT_CURRENCY || "EUR",
@@ -86,6 +110,16 @@ app.post("/webhooks/billwerk/payment-escalated", async (req, res) => {
     const event = req.body || {};
     if (event.Event !== "PaymentEscalated") {
       return res.status(202).json({ status: "ignored" });
+    }
+
+    const triggerDays = normalizeTriggerDays(event.TriggerDays);
+    if (!isTriggerDayAllowed(triggerDays)) {
+      return res.status(202).json({
+        status: "ignored",
+        reason: "trigger_days_not_allowed",
+        triggerDays,
+        allowedTriggerDays: config.billwerkTriggerDays,
+      });
     }
 
     if (!hasBillwerkCredentials() || !config.paywiseToken) {
@@ -204,6 +238,19 @@ function toDateOnly(value) {
 
 function hasBillwerkCredentials() {
   return Boolean(config.billwerkClientId && config.billwerkClientSecret);
+}
+
+function normalizeTriggerDays(value) {
+  if (value === undefined || value === null) return null;
+  const num = Number(value);
+  if (!Number.isFinite(num)) return null;
+  return Math.trunc(num);
+}
+
+function isTriggerDayAllowed(triggerDays) {
+  if (!config.billwerkTriggerDays.length) return true;
+  if (triggerDays === null) return false;
+  return config.billwerkTriggerDays.includes(triggerDays);
 }
 
 async function getBillwerkAuthorization() {
