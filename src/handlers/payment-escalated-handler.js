@@ -21,18 +21,26 @@ import { sendLetterxpressPrintJob } from "../services/letterxpress-service.js";
 import { normalizeAmount, toDateOnly } from "../shared-utils.js";
 import { paywise } from "../clients/paywise-client.js";
 
-async function handlePaymentEscalated(req, res) {
+async function handlePaymentEscalated(c) {
   try {
     if (config.webhookSharedSecret) {
-      const sharedSecret = req.get("x-webhook-secret");
+      const sharedSecret = c.req.header("x-webhook-secret");
       if (!sharedSecret || sharedSecret !== config.webhookSharedSecret) {
-        return res.status(401).json({ error: "Unauthorized" });
+        return c.json({ error: "Unauthorized" }, 401);
       }
     }
 
-    const event = req.body || {};
+    let event = {};
+    try {
+      const rawBody = await c.req.text();
+      if (rawBody.trim()) {
+        event = JSON.parse(rawBody);
+      }
+    } catch (error) {
+      return c.json({ error: "Invalid JSON payload" }, 400);
+    }
     if (event.Event !== "PaymentEscalated") {
-      return res.status(202).json({ status: "ignored" });
+      return c.json({ status: "ignored" }, 202);
     }
 
     const triggerDays = normalizeTriggerDays(event.TriggerDays);
@@ -46,41 +54,42 @@ async function handlePaymentEscalated(req, res) {
     );
 
     if (!isDunningTrigger && !isPaywiseTrigger) {
-      return res.status(202).json({
-        status: "ignored",
-        reason: "trigger_days_not_allowed",
-        triggerDays,
-        allowedTriggerDays: config.billwerkTriggerDays,
-        dunningTriggerDays: config.billwerkDunningTriggerDays,
-      });
+      return c.json(
+        {
+          status: "ignored",
+          reason: "trigger_days_not_allowed",
+          triggerDays,
+          allowedTriggerDays: config.billwerkTriggerDays,
+          dunningTriggerDays: config.billwerkDunningTriggerDays,
+        },
+        202,
+      );
     }
 
     const contractId = event.ContractId;
     const customerId = event.CustomerId;
     if (!contractId || !customerId) {
-      return res
-        .status(422)
-        .json({ error: "Missing ContractId or CustomerId" });
+      return c.json({ error: "Missing ContractId or CustomerId" }, 422);
     }
 
     if (isDunningTrigger) {
-      return await handleDunningFlow({ customerId, triggerDays }, res);
+      return await handleDunningFlow({ customerId, triggerDays }, c);
     }
 
     return await handlePaywiseFlow(
       { contractId, customerId, event, triggerDays },
-      res,
+      c,
     );
   } catch (error) {
     const message = error.response?.data || error.message || "Unknown error";
     const status = error.response?.status || 500;
-    return res.status(status).json({ error: message });
+    return c.json({ error: message }, status);
   }
 }
 
-async function handleDunningFlow({ customerId, triggerDays }, res) {
+async function handleDunningFlow({ customerId, triggerDays }, c) {
   if (!hasBillwerkCredentials() || !hasLetterxpressCredentials()) {
-    return res.status(500).json({ error: "Missing API credentials" });
+    return c.json({ error: "Missing API credentials" }, 500);
   }
 
   const dunningResult = await downloadLatestDunningPdf({
@@ -90,10 +99,13 @@ async function handleDunningFlow({ customerId, triggerDays }, res) {
   });
 
   if (!dunningResult) {
-    return res.status(422).json({
-      error: "No dunning available for LetterXpress send",
-      triggerDays,
-    });
+    return c.json(
+      {
+        error: "No dunning available for LetterXpress send",
+        triggerDays,
+      },
+      422,
+    );
   }
 
   const filename = buildDunningFilename(dunningResult.dunning);
@@ -102,19 +114,22 @@ async function handleDunningFlow({ customerId, triggerDays }, res) {
     filename,
   });
 
-  return res.status(201).json({
-    status: "dunning_sent",
-    dunningId: dunningResult.dunning.Id,
-    letterxpressJobId: printJob?.data?.id ?? printJob?.id ?? null,
-  });
+  return c.json(
+    {
+      status: "dunning_sent",
+      dunningId: dunningResult.dunning.Id,
+      letterxpressJobId: printJob?.data?.id ?? printJob?.id ?? null,
+    },
+    201,
+  );
 }
 
 async function handlePaywiseFlow(
   { contractId, customerId, event, triggerDays },
-  res,
+  c,
 ) {
   if (!hasBillwerkCredentials() || !config.paywiseToken) {
-    return res.status(500).json({ error: "Missing API credentials" });
+    return c.json({ error: "Missing API credentials" }, 500);
   }
 
   const dueDate = toDateOnly(event.DueDate);
@@ -142,9 +157,7 @@ async function handlePaywiseFlow(
     claimReference,
   );
   if (existingClaim) {
-    return res
-      .status(200)
-      .json({ status: "exists", claimId: existingClaim.id });
+    return c.json({ status: "exists", claimId: existingClaim.id }, 200);
   }
 
   const openAmount = pickOpenAmount(contract, receivableEntry, invoice);
@@ -195,9 +208,10 @@ async function handlePaywiseFlow(
     description: `Übergabe an Paywise. AZ: ${paywiseCaseReference}`,
     bookingDate: toDateOnly(new Date()),
   });
-  return res
-    .status(201)
-    .json({ status: "created", claimId: createdClaim.data.id, triggerDays });
+  return c.json(
+    { status: "created", claimId: createdClaim.data.id, triggerDays },
+    201,
+  );
 }
 
 async function createPaywiseClaim(payload) {
