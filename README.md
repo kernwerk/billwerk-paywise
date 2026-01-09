@@ -1,6 +1,6 @@
-# bwsync
+# dunning-collections-bridge
 
-Webhook listener that receives Billwerk `PaymentEscalated` events and creates a Paywise Case Management claim.
+Webhook listener that receives Billwerk `PaymentEscalated` events, sends dunning letters via LetterXpress, and hands off to Paywise for collection after the escalation process ends.
 
 ## Setup
 
@@ -51,13 +51,15 @@ Example payload:
 
 1. Fetch contract, customer, and ledger entries from Billwerk.
 2. Resolve the matching invoice (ledger entry invoice id or latest invoice for the contract).
-3. Create or reuse a Paywise debtor using the Billwerk customer data.
-4. Create a Paywise claim using invoice data and the escalation due date.
-5. When `TriggerDays` matches the dunning trigger day (default: 22), fetch the latest Billwerk dunning PDF and send it via LetterXpress.
+3. When `TriggerDays` matches the dunning trigger day (default: 22), fetch the latest Billwerk dunning PDF and send it via LetterXpress.
+4. When `TriggerDays` matches the Paywise trigger days (default: 30), create or reuse a Paywise debtor using the Billwerk customer data.
+5. Create a Paywise claim using invoice data and the escalation due date.
+6. Release the Paywise claim and book the write-off payment in Billwerk.
 
 ## Notes
 
 - The claim is de-duplicated by `document_reference` or `your_reference`.
+- It is possible to send every dunning letter via LetterXpress by configuring additional webhook trigger days for dunning handling.
 - If you want to enforce webhook authentication, set `WEBHOOK_SHARED_SECRET` and send `x-webhook-secret`.
 - If Billwerk has many invoices per customer, consider adding pagination to the invoice listing.
 - Billwerk dunnings are fetched from `/api/v1/dunnings` using the configured template id.

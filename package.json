@@ -1,8 +1,8 @@
 {
-  "name": "bwsync",
+  "name": "dunning-collections-bridge",
   "version": "0.1.0",
   "private": true,
-  "description": "Billwerk PaymentEscalated webhook to Paywise case sync",
+  "description": "Payment escalation webhooks for dunning delivery and collections handoff",
   "main": "src/server.js",
   "type": "module",
   "scripts": {
