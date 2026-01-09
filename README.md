@@ -61,3 +61,9 @@ Example payload:
 - If you want to enforce webhook authentication, set `WEBHOOK_SHARED_SECRET` and send `x-webhook-secret`.
 - If Billwerk has many invoices per customer, consider adding pagination to the invoice listing.
 - Billwerk dunnings are fetched from `/api/v1/dunnings` using the configured template id.
+
+## Security
+
+- Never commit `.env` or real credentials; rotate keys if they are exposed.
+- Avoid logging personal data; the webhook payload contains customer data.
+- Configure test credentials for development and switch `LETTERXPRESS_MODE` to `live` only in production.
