@@ -18,6 +18,7 @@ cp .env.example .env
 
 Set `BILLWERK_CLIENT_ID`, `BILLWERK_CLIENT_SECRET`, and `PAYWISE_TOKEN`. The Billwerk OAuth URL is derived from `BILLWERK_BASE_URL` (e.g., `https://app.billwerk.com/oauth/token/`).
 Optionally set `BILLWERK_TRIGGER_DAYS` to a comma-separated list of `TriggerDays` values that should create a Paywise case (default: `30`).
+For LetterXpress dunning handling, configure `BILLWERK_DUNNING_TRIGGER_DAYS` (default: `22`), `BILLWERK_DUNNING_TEMPLATE_ID`, plus `LETTERXPRESS_USERNAME` and `LETTERXPRESS_API_KEY`. The LetterXpress mode defaults to `test`.
 
 3. Start the server:
 
@@ -52,9 +53,11 @@ Example payload:
 2. Resolve the matching invoice (ledger entry invoice id or latest invoice for the contract).
 3. Create or reuse a Paywise debtor using the Billwerk customer data.
 4. Create a Paywise claim using invoice data and the escalation due date.
+5. When `TriggerDays` matches the dunning trigger day (default: 22), fetch the latest Billwerk dunning PDF and send it via LetterXpress.
 
 ## Notes
 
 - The claim is de-duplicated by `document_reference` or `your_reference`.
 - If you want to enforce webhook authentication, set `WEBHOOK_SHARED_SECRET` and send `x-webhook-secret`.
 - If Billwerk has many invoices per customer, consider adding pagination to the invoice listing.
+- Billwerk dunnings are fetched from `/api/v1/dunnings` using the configured template id.
